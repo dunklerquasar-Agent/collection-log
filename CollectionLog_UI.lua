@@ -7144,22 +7144,33 @@ if button ~= "LeftButton" then return end
         -- appearance IDs. Resolve the difficulty-specific variant link so the
         -- Ctrl+Click preview shows the color variant of the selected difficulty
         -- instead of always showing the Normal/base appearance.
-        if self.groupId and ns and ns.RaidDungeonMeta and ns.RaidDungeonMeta.GetItemMeta
-          and C_TransmogCollection and C_TransmogCollection.GetAppearanceSourceInfo then
+        if self.groupId and ns and ns.RaidDungeonMeta and ns.RaidDungeonMeta.GetItemMeta then
           local okMeta, meta = pcall(ns.RaidDungeonMeta.GetItemMeta, self.groupId, self.itemID)
           if okMeta and type(meta) == "table"
             and tostring(meta.kind or meta.type or ""):lower() == "appearance" then
+            local variantLink
+            -- 1) Per-difficulty source ID. The meta build's canonical variant
+            --    arrays override stamped pack values whenever they exist, so this
+            --    resolves the correct variant even for rows whose pack export
+            --    collapsed onto the Normal source.
             local modID = tonumber(meta.itemModifiedAppearanceID or meta.sourceID or meta.modID or 0) or 0
-            if modID > 0 then
-              -- Modern clients return a single info table; legacy clients returned
-              -- multiple values where the 6th is the itemLink.
+            if modID > 0 and C_TransmogCollection and C_TransmogCollection.GetAppearanceSourceInfo then
+              -- modern API: single info table (info.itemLink); legacy: 6th return is itemLink
               local okInfo, r1, _, _, _, _, legacyLink = pcall(C_TransmogCollection.GetAppearanceSourceInfo, modID)
               if okInfo then
-                local variantLink = (type(r1) == "table" and r1.itemLink) or legacyLink
-                if type(variantLink) == "string" and variantLink ~= "" then
-                  link = variantLink
-                end
+                variantLink = (type(r1) == "table" and r1.itemLink) or legacyLink
               end
+            end
+            -- 2) Scanner-collapsed rows without per-difficulty source IDs often
+            --    still carry the per-difficulty itemLink whose appearance
+            --    modifier suffix selects the right color variant.
+            if type(variantLink) ~= "string" or variantLink == "" then
+              if type(meta.itemLink) == "string" and meta.itemLink ~= "" then
+                variantLink = meta.itemLink
+              end
+            end
+            if type(variantLink) == "string" and variantLink ~= "" then
+              link = variantLink
             end
           end
         end
