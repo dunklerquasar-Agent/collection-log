@@ -7139,6 +7139,31 @@ if button ~= "LeftButton" then return end
           link = "item:" .. tostring(self.itemID)
         end
 
+        -- Raid/dungeon grids display one canonical (Normal-difficulty) itemID per
+        -- collectible; the selected difficulty is tracked through per-group
+        -- appearance IDs. Resolve the difficulty-specific variant link so the
+        -- Ctrl+Click preview shows the color variant of the selected difficulty
+        -- instead of always showing the Normal/base appearance.
+        if self.groupId and ns and ns.RaidDungeonMeta and ns.RaidDungeonMeta.GetItemMeta
+          and C_TransmogCollection and C_TransmogCollection.GetAppearanceSourceInfo then
+          local okMeta, meta = pcall(ns.RaidDungeonMeta.GetItemMeta, self.groupId, self.itemID)
+          if okMeta and type(meta) == "table"
+            and tostring(meta.kind or meta.type or ""):lower() == "appearance" then
+            local modID = tonumber(meta.itemModifiedAppearanceID or meta.sourceID or meta.modID or 0) or 0
+            if modID > 0 then
+              -- Modern clients return a single info table; legacy clients returned
+              -- multiple values where the 6th is the itemLink.
+              local okInfo, r1, _, _, _, _, legacyLink = pcall(C_TransmogCollection.GetAppearanceSourceInfo, modID)
+              if okInfo then
+                local variantLink = (type(r1) == "table" and r1.itemLink) or legacyLink
+                if type(variantLink) == "string" and variantLink ~= "" then
+                  link = variantLink
+                end
+              end
+            end
+          end
+        end
+
         if DressUpItemLink and link then
           pcall(DressUpItemLink, link)
         elseif HandleModifiedItemClick and link then
